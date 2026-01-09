@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppSettings, Lorebook, LorebookEntry, SettingsPreset } from '../types';
 import { Button } from './Button';
-import { 
-  User, Cpu, Server, Key, X, Check, Loader2, Image as ImageIcon, 
-  Trash2, Upload, Palette, Zap, Sparkles, Globe, BookOpen, Pencil, 
-  ToggleRight, ToggleLeft, CheckSquare, Square, Edit, FileJson, Sliders, RefreshCcw, ExternalLink, AlertTriangle, ChevronLeft, Save, Plus, FileCode
+import {
+  User, Cpu, Server, Key, X, Check, Loader2, Image as ImageIcon,
+  Trash2, Upload, Palette, Zap, Sparkles, Globe, BookOpen, Pencil,
+  ToggleRight, ToggleLeft, CheckSquare, Square, Edit, FileJson, Sliders, RefreshCcw, ExternalLink, AlertTriangle, ChevronLeft, Save, Plus, FileCode, Download
 } from 'lucide-react';
 import { testConnection } from '../services/apiService';
 import { HORDE_MODELS, GEMINI_MODELS, DEEPSEEK_MODELS, ROUTEWAY_MODELS, INITIAL_SETTINGS, PROMPT_TEMPLATES } from '../constants';
+import { PuterStatus } from './PuterStatus';
+
+declare const puter: any;
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -26,10 +29,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const lorebookInputRef = useRef<HTMLInputElement>(null);
+
+  const [puterModels, setPuterModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   
   // Lorebook State
   const [manageLorebookMode, setManageLorebookMode] = useState(false);
@@ -200,6 +207,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
           setTestStatus('error');
           setTestMessage(error instanceof Error ? error.message : "Connection Failed");
       }
+  };
+
+  const handleFetchPuterModels = async () => {
+      setFetchingModels(true);
+      try {
+          if (typeof puter === 'undefined') {
+              throw new Error('Puter SDK not loaded');
+          }
+
+          const models = await puter.ai.listModels();
+          console.log('Puter Models:', models);
+
+          if (Array.isArray(models)) {
+              const modelIds = models.map((m: any) => {
+                  if (typeof m === 'string') return m;
+                  return m.id || m.name || m.model || String(m);
+              });
+              setPuterModels(modelIds);
+              setShowModelDropdown(true);
+          } else {
+              setPuterModels([]);
+              alert('No models found or unexpected format');
+          }
+      } catch (error) {
+          console.error('Failed to fetch Puter models:', error);
+          alert('Failed to fetch models: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      } finally {
+          setFetchingModels(false);
+      }
+  };
+
+  const handleSelectPuterModel = (modelId: string) => {
+      handleChange('puterModelInput', modelId);
+      setShowModelDropdown(false);
   };
 
   // Lorebook Handlers
@@ -468,9 +509,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">API Provider</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(['gemini', 'openai', 'kobold', 'horde', 'openrouter', 'deepseek', 'routeway'] as const).map(p => (
-                                            <button 
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {(['gemini', 'puter', 'openai', 'kobold', 'horde', 'openrouter', 'deepseek', 'routeway'] as const).map(p => (
+                                            <button
                                                 key={p}
                                                 onClick={() => handleChange('apiProvider', p === 'kobold' ? 'custom' : p)}
                                                 className={`py-2 px-2 text-[10px] uppercase font-bold border transition-all truncate ${
@@ -502,11 +543,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                     </div>
                                 )}
 
-                                {localSettings.apiProvider !== 'horde' && (
+                                {localSettings.apiProvider === 'puter' && (
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1 flex items-center justify-between">
+                                            <span>Puter Status</span>
+                                        </label>
+                                        <PuterStatus />
+                                        <p className="text-[9px] text-zinc-600 mt-2">
+                                            Authentication handled automatically by Puter SDK
+                                        </p>
+                                    </div>
+                                )}
+
+                                {localSettings.apiProvider !== 'horde' && localSettings.apiProvider !== 'puter' && (
                                     <div>
                                         <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">API Key</label>
                                         <div className="relative">
-                                            <input 
+                                            <input
                                                 type="password"
                                                 className="w-full bg-black border border-zinc-800 p-3 pl-10 text-zinc-200 focus:border-orange-500/50 outline-none text-sm font-mono"
                                                 value={localSettings.apiKey}
@@ -515,9 +568,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                             />
                                             <Key size={14} className="absolute left-3 top-3.5 text-zinc-600" />
                                             {localSettings.apiProvider === 'gemini' && (
-                                                <a 
-                                                    href="https://aistudio.google.com/app/apikey" 
-                                                    target="_blank" 
+                                                <a
+                                                    href="https://aistudio.google.com/app/apikey"
+                                                    target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="absolute right-3 top-3.5 text-zinc-500 hover:text-orange-500 transition-colors"
                                                     title="Get API Key"
@@ -531,8 +584,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
 
                                 <div>
                                     <label className="block text-[10px] font-bold text-zinc-600 uppercase mb-1">Model Name</label>
-                                    {localSettings.apiProvider === 'horde' ? (
-                                        <select 
+                                    {localSettings.apiProvider === 'puter' ? (
+                                        <div className="space-y-2">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    className="flex-1 bg-black border border-zinc-800 p-3 text-zinc-200 focus:border-orange-500/50 outline-none text-sm font-mono"
+                                                    value={localSettings.puterModelInput || ''}
+                                                    onChange={(e) => handleChange('puterModelInput', e.target.value)}
+                                                    placeholder="gpt-4o, claude-3.5-sonnet, etc."
+                                                />
+                                                <button
+                                                    onClick={handleFetchPuterModels}
+                                                    disabled={fetchingModels}
+                                                    className="bg-black border border-zinc-800 px-4 py-2 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors flex items-center gap-2 text-xs disabled:opacity-50"
+                                                    title="Fetch available models"
+                                                >
+                                                    {fetchingModels ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                                    <span className="hidden sm:inline">Fetch</span>
+                                                </button>
+                                            </div>
+                                            {showModelDropdown && puterModels.length > 0 && (
+                                                <div className="bg-zinc-900 border border-zinc-800 rounded max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
+                                                    {puterModels.map((model, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => handleSelectPuterModel(model)}
+                                                            className="w-full text-left px-3 py-2 text-xs font-mono text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+                                                        >
+                                                            {model}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <p className="text-[9px] text-zinc-600">
+                                                Manually type or fetch available models from Puter
+                                            </p>
+                                        </div>
+                                    ) : localSettings.apiProvider === 'horde' ? (
+                                        <select
                                             value={localSettings.modelName}
                                             onChange={(e) => handleChange('modelName', e.target.value)}
                                             className="w-full bg-black border border-zinc-800 p-3 text-zinc-200 focus:border-orange-500/50 outline-none text-xs font-mono"
@@ -540,7 +629,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                             {HORDE_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     ) : localSettings.apiProvider === 'gemini' ? (
-                                        <select 
+                                        <select
                                             value={localSettings.modelName}
                                             onChange={(e) => handleChange('modelName', e.target.value)}
                                             className="w-full bg-black border border-zinc-800 p-3 text-zinc-200 focus:border-orange-500/50 outline-none text-xs font-mono"
@@ -548,7 +637,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                             {GEMINI_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     ) : localSettings.apiProvider === 'deepseek' ? (
-                                        <select 
+                                        <select
                                             value={localSettings.modelName}
                                             onChange={(e) => handleChange('modelName', e.target.value)}
                                             className="w-full bg-black border border-zinc-800 p-3 text-zinc-200 focus:border-orange-500/50 outline-none text-xs font-mono"
@@ -556,7 +645,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                             {DEEPSEEK_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     ) : (
-                                        <input 
+                                        <input
                                             className="w-full bg-black border border-zinc-800 p-3 text-zinc-200 focus:border-orange-500/50 outline-none text-sm font-mono"
                                             value={localSettings.modelName}
                                             onChange={(e) => handleChange('modelName', e.target.value)}
@@ -565,22 +654,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                                     )}
                                 </div>
                                 
-                                <div className="flex gap-2">
-                                     <Button 
-                                        onClick={handleTestConnection}
-                                        disabled={testStatus === 'loading'}
-                                        variant={testStatus === 'error' ? 'danger' : testStatus === 'success' ? 'primary' : 'secondary'}
-                                        className="w-full text-xs py-2 flex items-center justify-center gap-2"
-                                     >
-                                        {testStatus === 'loading' && <Loader2 className="animate-spin" size={14} />}
-                                        {testStatus === 'idle' && "Test Connection"}
-                                        {testStatus === 'loading' && "Connecting..."}
-                                        {testStatus === 'success' && <Check size={14} />}
-                                        {testStatus === 'error' && <X size={14} />}
-                                        {testStatus === 'success' && "Connected"}
-                                        {testStatus === 'error' && "Failed"}
-                                     </Button>
-                                </div>
+                                {localSettings.apiProvider !== 'puter' && (
+                                    <div className="flex gap-2">
+                                         <Button
+                                            onClick={handleTestConnection}
+                                            disabled={testStatus === 'loading'}
+                                            variant={testStatus === 'error' ? 'danger' : testStatus === 'success' ? 'primary' : 'secondary'}
+                                            className="w-full text-xs py-2 flex items-center justify-center gap-2"
+                                         >
+                                            {testStatus === 'loading' && <Loader2 className="animate-spin" size={14} />}
+                                            {testStatus === 'idle' && "Test Connection"}
+                                            {testStatus === 'loading' && "Connecting..."}
+                                            {testStatus === 'success' && <Check size={14} />}
+                                            {testStatus === 'error' && <X size={14} />}
+                                            {testStatus === 'success' && "Connected"}
+                                            {testStatus === 'error' && "Failed"}
+                                         </Button>
+                                    </div>
+                                )}
                                 {testMessage && (
                                     <div className={`text-[10px] p-2 rounded ${testStatus === 'error' ? 'text-red-400 bg-red-950/20' : 'text-emerald-400 bg-emerald-950/20'}`}>
                                         {testMessage}

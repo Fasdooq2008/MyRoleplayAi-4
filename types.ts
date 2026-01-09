@@ -49,7 +49,7 @@ export interface ChatSession {
   lastUpdated: number;
 }
 
-export type ApiProvider = 'gemini' | 'openai' | 'custom' | 'openrouter' | 'horde' | 'deepseek' | 'routeway';
+export type ApiProvider = 'gemini' | 'openai' | 'custom' | 'openrouter' | 'horde' | 'deepseek' | 'routeway' | 'puter';
 
 export interface SettingsPreset {
   id: string;
@@ -92,7 +92,10 @@ export interface AppSettings {
   apiKey: string; // User override
   customEndpoint: string; // For Custom/Kobold/OpenRouter
   promptTemplate: string; // 'chatml', 'llama3', 'alpaca', 'vicuna', 'plain'
-  
+
+  // Puter-specific
+  puterModelInput: string; // Manual model ID input for Puter
+
   globalLorebooks: Lorebook[];
   savedPresets: SettingsPreset[];
 }

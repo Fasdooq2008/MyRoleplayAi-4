@@ -1,6 +1,8 @@
 import { GoogleGenAI, Content, Part } from "@google/genai";
 import { Message, AppSettings, Character, DEFAULT_SYSTEM_PROMPT, Lorebook } from '../types';
 
+declare const puter: any;
+
 // Helper to estimate tokens (rough approximation: 4 chars = 1 token)
 const estimateTokens = (text: string): number => {
     return Math.ceil(text.length / 4);
@@ -543,9 +545,82 @@ async function* generateOpenAICompatibleStream(
     }
 }
 
+async function* generatePuterStream(
+    history: Message[],
+    character: Character,
+    settings: AppSettings,
+    summary: string = "",
+    signal?: AbortSignal
+): AsyncGenerator<string> {
+    if (typeof puter === 'undefined') {
+        throw new Error('Puter SDK not loaded. Please ensure the Puter.js script is included in your HTML.');
+    }
+
+    const lorebookContext = getLorebookContext(history, character, settings);
+    const systemContent = buildSystemContext(character, settings, lorebookContext, summary);
+
+    const SAFE_CONTEXT_LIMIT = 8192;
+    const maxOutput = Number(settings.maxOutputTokens) || 1024;
+    const trimmedHistory = trimHistory(history, systemContent, SAFE_CONTEXT_LIMIT, maxOutput);
+
+    const messages = [
+        { role: 'system', content: systemContent },
+        ...trimmedHistory.map(m => ({
+            role: m.role === 'model' ? 'assistant' : m.role,
+            content: m.content
+        }))
+    ];
+
+    const modelToUse = settings.puterModelInput || settings.modelName || 'gpt-4o';
+
+    try {
+        const result = await puter.ai.chat(messages, {
+            model: modelToUse,
+            temperature: Number(settings.temperature),
+            max_tokens: Number(settings.maxOutputTokens),
+            stream: settings.streamResponse
+        });
+
+        if (settings.streamResponse) {
+            if (typeof result[Symbol.asyncIterator] === 'function') {
+                for await (const chunk of result) {
+                    if (signal?.aborted) throw new Error("Aborted");
+                    if (chunk && typeof chunk === 'string') {
+                        yield chunk;
+                    } else if (chunk?.message?.content) {
+                        yield chunk.message.content;
+                    }
+                }
+            } else {
+                yield result?.message?.content || result?.content || String(result);
+            }
+        } else {
+            yield result?.message?.content || result?.content || String(result);
+        }
+    } catch (error: any) {
+        if (error.name === 'AbortError' || error.message === "Aborted") throw error;
+
+        const errorMessage = error.message || String(error);
+
+        if (errorMessage.toLowerCase().includes('quota') ||
+            errorMessage.toLowerCase().includes('insufficient') ||
+            errorMessage.toLowerCase().includes('credit') ||
+            errorMessage.toLowerCase().includes('limit exceeded')) {
+            throw new Error('PUTER_QUOTA_EXCEEDED: You have reached your free credit limit on Puter. Please wait or upgrade your account.');
+        }
+
+        if (errorMessage.toLowerCase().includes('auth') || errorMessage.toLowerCase().includes('login')) {
+            throw new Error('PUTER_AUTH_REQUIRED: Please authenticate with Puter to use this provider.');
+        }
+
+        console.error('Puter AI Error:', error);
+        throw new Error(`Puter Error: ${errorMessage}`);
+    }
+}
+
 async function* generateHordeStream(
-    history: Message[], 
-    character: Character, 
+    history: Message[],
+    character: Character,
     settings: AppSettings,
     summary: string = "",
     signal?: AbortSignal
@@ -805,8 +880,10 @@ export async function* generateResponse(
 ): AsyncGenerator<string> {
   let totalContent = "";
   
-  const initialStream = settings.apiProvider === 'gemini' 
+  const initialStream = settings.apiProvider === 'gemini'
       ? generateGeminiStream(history, character, settings, summary, signal)
+      : settings.apiProvider === 'puter'
+      ? generatePuterStream(history, character, settings, summary, signal)
       : settings.apiProvider === 'horde'
       ? generateHordeStream(history, character, settings, summary, signal)
       : generateOpenAICompatibleStream(history, character, settings, summary, signal);
@@ -862,6 +939,8 @@ BEGIN CONTINUATION NOW:]`
 
           const continueStream = settings.apiProvider === 'gemini'
               ? generateGeminiStream(continueHistory, character, settings, summary, signal)
+              : settings.apiProvider === 'puter'
+              ? generatePuterStream(continueHistory, character, settings, summary, signal)
               : settings.apiProvider === 'horde'
               ? generateHordeStream(continueHistory, character, settings, summary, signal)
               : generateOpenAICompatibleStream(continueHistory, character, settings, summary, signal);

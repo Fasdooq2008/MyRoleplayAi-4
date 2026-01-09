@@ -82,3 +82,24 @@ npm run preview
 
 For issues or questions, please open an issue on GitHub or visit:
 https://ai.studio/apps/drive/1AxHvYpyWfrTrhZTLk4N-LrN9MUlVMrkp
+
+## ⚡ Puter.js Integration (NEW)
+
+VelvetCore now supports **Puter.js** as a primary AI provider with advanced features:
+
+### Features
+- **Automatic Authentication:** No manual API keys needed - Puter handles OAuth automatically
+- **Dynamic Model Selection:** Manually type model IDs or fetch available models with one click
+- **User Status Display:** See your connected Puter account and authentication status
+- **Smart Error Handling:** Clear feedback for quota limits and rate limiting
+- **Multiple AI Models:** Access GPT-4, Claude, Llama, Mistral, and more through one unified API
+
+### Quick Start
+1. Open Settings → Generation tab
+2. Select "PUTER" as API Provider
+3. Authenticate when prompted (automatic popup)
+4. Type a model ID manually (e.g., `gpt-4o`) OR click "Fetch" to see all available models
+5. Start chatting!
+
+For detailed setup instructions, see [PUTER_INTEGRATION.md](./PUTER_INTEGRATION.md)
+

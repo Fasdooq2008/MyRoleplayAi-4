@@ -35,7 +35,10 @@ export const INITIAL_SETTINGS: AppSettings = {
   apiKey: '',
   customEndpoint: '',
   promptTemplate: 'chatml', // Default template as requested
-  
+
+  // Puter defaults
+  puterModelInput: 'gpt-4o',
+
   globalLorebooks: [],
   savedPresets: []
 };
